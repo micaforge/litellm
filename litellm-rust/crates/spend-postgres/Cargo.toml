@@ -17,4 +17,5 @@ time.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+sqlx = { workspace = true, features = ["time"] }
 tokio.workspace = true

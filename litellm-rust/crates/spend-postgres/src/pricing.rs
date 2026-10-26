@@ -5,6 +5,9 @@
 //! the cost map records zero, as the Python gateway does for
 //! unpriced models.
 
+use litellm_cost::{
+    Pricing, PromptConvention, Rate, Rates, Request, ServiceTier, ThresholdPolicy, Usage,
+};
 use litellm_model_catalog::Catalog;
 
 use crate::{Deployment, Error};
@@ -32,14 +35,54 @@ impl CatalogPricer {
         prompt_tokens: u64,
         completion_tokens: u64,
     ) -> Result<f64, Error> {
-        let _ = (deployment, prompt_tokens, completion_tokens);
-        todo!("crate-1 stage 2: price via litellm-cost + litellm-model-catalog")
+        if deployment.free {
+            return Ok(0.0);
+        }
+        let Some(catalog_key) = deployment.catalog_key else {
+            return Ok(0.0);
+        };
+        let Some(found) = self.catalog.lookup(catalog_key) else {
+            return Ok(0.0);
+        };
+        let info = found.entry.info();
+        let pricing = Pricing {
+            standard: Rates {
+                input: Rate::Value(info.input_cost_per_token.unwrap_or(0.0)),
+                output: Rate::Value(info.output_cost_per_token.unwrap_or(0.0)),
+                cache_read: Rate::Missing,
+                cache_write: Rate::Missing,
+                cache_write_1h: Rate::Missing,
+            },
+            tiers: &[],
+            thresholds: &[],
+            off_peak: None,
+        };
+        let request = Request {
+            usage: Usage {
+                prompt_tokens,
+                completion_tokens,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+                cache_write_5m_tokens: None,
+                cache_write_1h_tokens: None,
+                prompt_convention: PromptConvention::ExcludesCache,
+            },
+            service_tier: ServiceTier::Standard,
+            threshold_policy: ThresholdPolicy::Exclusive,
+            region_multiplier: None,
+            billed_at_utc_minute: None,
+        };
+        litellm_cost::calculate(&pricing, &request)
+            .map(|cost| cost.total())
+            .map_err(|kind| Error::Pricing {
+                model: deployment.model.to_string(),
+                kind,
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{deployment, test_support::fixture_pricer};
     use rstest::rstest;
 

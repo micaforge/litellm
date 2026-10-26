@@ -24,12 +24,12 @@ pub struct SpendLogRecord {
     /// The caller key's hash. Never the raw key.
     pub api_key: String,
     pub spend: f64,
-    pub total_tokens: i64,
-    pub prompt_tokens: i64,
-    pub completion_tokens: i64,
+    pub total_tokens: i32,
+    pub prompt_tokens: i32,
+    pub completion_tokens: i32,
     pub start_time: OffsetDateTime,
     pub end_time: OffsetDateTime,
-    pub request_duration_ms: Option<i64>,
+    pub request_duration_ms: Option<i32>,
     pub completion_start_time: Option<OffsetDateTime>,
     pub model: String,
     pub model_id: Option<String>,
@@ -131,8 +131,60 @@ impl SpendLogDraft {
     /// hash the caller key, and land the record on the serving
     /// deployment.
     pub fn build(self, pricer: &CatalogPricer) -> Result<SpendLogRecord, Error> {
-        let _ = pricer;
-        todo!("crate-1 stage 2: stamp the record")
+        let spend = pricer.spend(&self.serving, self.prompt_tokens, self.completion_tokens)?;
+        let prompt_tokens =
+            i32::try_from(self.prompt_tokens).map_err(|_| Error::TokenOverflow {
+                field: "prompt_tokens",
+            })?;
+        let completion_tokens =
+            i32::try_from(self.completion_tokens).map_err(|_| Error::TokenOverflow {
+                field: "completion_tokens",
+            })?;
+        let total_tokens =
+            prompt_tokens
+                .checked_add(completion_tokens)
+                .ok_or(Error::TokenOverflow {
+                    field: "total_tokens",
+                })?;
+        let duration_ms = (self.end_time - self.start_time).whole_milliseconds();
+        Ok(SpendLogRecord {
+            request_id: self.request_id,
+            call_type: self.call_type,
+            api_key: self
+                .raw_api_key
+                .as_deref()
+                .map(hash_api_key)
+                .unwrap_or_default(),
+            spend,
+            total_tokens,
+            prompt_tokens,
+            completion_tokens,
+            start_time: self.start_time,
+            end_time: self.end_time,
+            request_duration_ms: Some(i32::try_from(duration_ms).unwrap_or(i32::MAX)),
+            completion_start_time: self.completion_start_time,
+            model: self.serving.model.to_string(),
+            model_id: self.model_id,
+            model_group: Some(self.serving.alias.to_string()),
+            custom_llm_provider: Some(self.serving.provider.to_string()),
+            api_base: self.serving.api_base.map(str::to_string),
+            user: self.user,
+            metadata: self.metadata,
+            cache_hit: self.cache_hit,
+            cache_key: self.cache_key,
+            request_tags: self.request_tags,
+            team_id: self.team_id,
+            organization_id: self.organization_id,
+            end_user: self.end_user,
+            requester_ip_address: self.requester_ip_address,
+            messages: self.messages,
+            response: self.response,
+            session_id: self.session_id,
+            status: self.status,
+            mcp_namespaced_tool_name: self.mcp_namespaced_tool_name,
+            proxy_server_request: self.proxy_server_request,
+            litellm_call_id: self.litellm_call_id,
+        })
     }
 }
 
