@@ -14,6 +14,9 @@ litellm-router = { path = "crates/router" }
 litellm-router-types = { path = "crates/router-types" }
 litellm-tracing = { path = "crates/tracing" }
 litellm-spend-clickhouse = { path = "crates/spend-clickhouse" }
+litellm-spend-postgres = { path = "crates/spend-postgres" }
+litellm-cost = { path = "crates/cost" }
+litellm-model-catalog = { path = "crates/model-catalog" }
 litellm-storage-clickhouse = { path = "crates/storage-clickhouse" }
 litellm-inference = { path = "crates/inference" }
 litellm-inference-transcription = { path = "crates/inference-transcription" }
