@@ -434,3 +434,48 @@ fn mcp_config_redacts_nested_credentials_and_preserves_policy_for_validation() {
 fn rejects_invalid_typed_mcp_settings(#[case] setting: &str) {
     assert!(Config::from_yaml(&format!("mcp_servers:\n  docs:\n    {setting}\n")).is_err());
 }
+
+#[rstest]
+fn litellm_settings_fallbacks_parse_in_declaration_order() {
+    // The production gateway config's shape (a07 crate-2 brief §1):
+    // one-step mappings under `litellm_settings.fallbacks`, each a
+    // single-key object naming the source and its ordered targets.
+    let config = Config::from_yaml(
+        "model_list: []\nlitellm_settings:\n  fallbacks:\n    - or-free-code: [\"or-free\"]\n    - or-free: [\"gem-flash\"]\n    - gem-flash: [\"or-free-code\"]\n    - gem-gemma: [\"or-free\"]\n",
+    )
+    .unwrap();
+
+    let fallbacks = config
+        .litellm_settings
+        .fallbacks
+        .expect("litellm_settings.fallbacks is parsed");
+    let chains: Vec<(&str, Vec<&str>)> = fallbacks
+        .iter()
+        .map(|entry| {
+            let (source, targets) = entry.iter().next().expect("one source per entry");
+            let targets = targets
+                .as_sequence()
+                .expect("targets are a sequence")
+                .iter()
+                .map(|target| target.as_str().expect("targets are model names"))
+                .collect();
+            (source.as_str(), targets)
+        })
+        .collect();
+    assert_eq!(
+        chains,
+        [
+            ("or-free-code", vec!["or-free"]),
+            ("or-free", vec!["gem-flash"]),
+            ("gem-flash", vec!["or-free-code"]),
+            ("gem-gemma", vec!["or-free"]),
+        ]
+    );
+}
+
+#[rstest]
+fn litellm_settings_without_fallbacks_leave_the_field_unset() {
+    let config = Config::from_yaml("model_list: []\n").unwrap();
+
+    assert!(config.litellm_settings.fallbacks.is_none());
+}

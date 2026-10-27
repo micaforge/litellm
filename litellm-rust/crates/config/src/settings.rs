@@ -219,6 +219,7 @@ pub struct LiteLlmSettings {
     pub drop_params: Option<Spelled<bool>>,
     pub request_timeout: Option<Spelled<f64>>,
     pub num_retries: Option<u64>,
+    pub fallbacks: Option<Box<[Object]>>,
     pub cache: Option<bool>,
     pub cache_params: Option<Object>,
     #[serde(deserialize_with = "one_or_many")]
@@ -240,6 +241,7 @@ impl fmt::Debug for LiteLlmSettings {
             .field("drop_params", &self.drop_params)
             .field("request_timeout", &self.request_timeout)
             .field("num_retries", &self.num_retries)
+            .field("fallbacks", &self.fallbacks)
             .field("cache", &self.cache)
             .field("cache_params", &self.cache_params)
             .field(
