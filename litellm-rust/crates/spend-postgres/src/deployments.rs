@@ -28,9 +28,11 @@ pub struct Deployment {
 
 const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
 
-/// The eight deployments of the production config (P1+P2 set in
-/// the crate-1 brief, §2).
-pub const OUR_DEPLOYMENTS: [Deployment; 8] = [
+/// The deployments of the production config: the P1+P2 set of
+/// the crate-1 brief (§2) plus the later additions the config
+/// gained after it (Sparkwright roster, API-GW meta pair),
+/// re-read from the live config for crate 2.
+pub const OUR_DEPLOYMENTS: [Deployment; 14] = [
     Deployment {
         alias: "or-flash",
         model: "google/gemini-2.5-flash",
@@ -95,6 +97,54 @@ pub const OUR_DEPLOYMENTS: [Deployment; 8] = [
         api_base: None,
         free: false,
     },
+    Deployment {
+        alias: "or-nemotron-vl",
+        model: "nvidia/nemotron-3.5-super-vl:free",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some(OPENROUTER_API_BASE),
+        free: true,
+    },
+    Deployment {
+        alias: "or-nemotron-ultra",
+        model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some(OPENROUTER_API_BASE),
+        free: true,
+    },
+    Deployment {
+        alias: "or-flint",
+        model: "recursive/flint-v1.0:free",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some(OPENROUTER_API_BASE),
+        free: true,
+    },
+    Deployment {
+        alias: "or-north-code",
+        model: "cohere/north-mini-code:free",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some(OPENROUTER_API_BASE),
+        free: true,
+    },
+    Deployment {
+        alias: "meta-spark",
+        model: "muse-spark-1.3",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some("https://api.meta.ai/v1"),
+        free: false,
+    },
+    Deployment {
+        alias: "meta-wonder",
+        model: "muse-wonder-1.0",
+        provider: "openai",
+        catalog_key: None,
+        api_base: Some("https://api.meta.ai/v1"),
+        free: false,
+    },
 ];
 
 /// The deployment serving an alias in the production config.
@@ -134,6 +184,12 @@ mod tests {
     #[case::gem_flash("gem-flash", "gemini-3.5-flash", "gemini", false)]
     #[case::gem_flash_lite("gem-flash-lite", "gemini-3.5-flash-lite", "gemini", false)]
     #[case::gem_gemma("gem-gemma", "gemma-4-31b-it", "gemini", false)]
+    #[case::or_nemotron_vl("or-nemotron-vl", "nvidia/nemotron-3.5-super-vl:free", "openai", true)]
+    #[case::or_nemotron_ultra("or-nemotron-ultra", "nvidia/nemotron-3-ultra-550b-a55b:free", "openai", true)]
+    #[case::or_flint("or-flint", "recursive/flint-v1.0:free", "openai", true)]
+    #[case::or_north_code("or-north-code", "cohere/north-mini-code:free", "openai", true)]
+    #[case::meta_spark("meta-spark", "muse-spark-1.3", "openai", false)]
+    #[case::meta_wonder("meta-wonder", "muse-wonder-1.0", "openai", false)]
     fn our_deployments_match_the_production_config(
         #[case] alias: &str,
         #[case] model: &str,
@@ -159,5 +215,53 @@ mod tests {
     fn unknown_alias_is_not_a_deployment() {
         assert!(deployment("not-our-model").is_none());
         assert!(fallback_targets("or-flash").is_none());
+    }
+
+    #[rstest]
+    fn the_table_covers_every_alias_in_the_current_config() {
+        assert_eq!(OUR_DEPLOYMENTS.len(), 14);
+        for alias in [
+            "or-flash",
+            "or-gpt-mini",
+            "or-gpt-image-mini",
+            "or-free-code",
+            "or-free",
+            "gem-flash",
+            "gem-flash-lite",
+            "gem-gemma",
+            "or-nemotron-vl",
+            "or-nemotron-ultra",
+            "or-flint",
+            "or-north-code",
+            "meta-spark",
+            "meta-wonder",
+        ] {
+            assert!(deployment(alias).is_some(), "{alias} is deployed");
+        }
+        // None of the later additions has a cost-map entry in the
+        // Python gateway's map, so none carries a catalog key and
+        // each prices at zero, as the Python gateway records them.
+        for alias in [
+            "or-nemotron-vl",
+            "or-nemotron-ultra",
+            "or-flint",
+            "or-north-code",
+            "meta-spark",
+            "meta-wonder",
+        ] {
+            assert_eq!(deployment(alias).unwrap().catalog_key, None);
+        }
+        // No fallback chain touches the later additions (the
+        // meta-* aliases carry none by the API-GW grant's terms).
+        for alias in [
+            "or-nemotron-vl",
+            "or-nemotron-ultra",
+            "or-flint",
+            "or-north-code",
+            "meta-spark",
+            "meta-wonder",
+        ] {
+            assert!(fallback_targets(alias).is_none());
+        }
     }
 }
